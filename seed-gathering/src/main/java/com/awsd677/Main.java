@@ -44,10 +44,6 @@ public class Main {
         parserManager.close();
 
         System.out.println("Seed Gathering Step 3 Completed!");
-
-    
-        
-        
     
     }
 }
