@@ -1,0 +1,1 @@
+seed-gathering/src/main/resources/libjava-tree-sitter.so filter=lfs diff=lfs merge=lfs -text
