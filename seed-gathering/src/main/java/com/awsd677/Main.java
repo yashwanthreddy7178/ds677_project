@@ -14,8 +14,8 @@ public class Main {
         DatasetManager datasetManager = new DatasetManager();
         DownloadManager downloadManager = new DownloadManager();
 
-        // Load metadata
-        List<Map<String, String>> metadataList = datasetManager.loadDataset("data/java_metadata.jsonl");
+        // Load metadata  seed-gathering/data/java_metadata.jsonl
+        List<Map<String, String>> metadataList = datasetManager.loadDataset("seed-gathering/data/java_metadata.jsonl");
 
         if (metadataList == null || metadataList.isEmpty()) {
             System.out.println("No metadata loaded. Exiting...");
@@ -45,9 +45,6 @@ public class Main {
 
         System.out.println("Seed Gathering Step 3 Completed!");
 
-    
-        
-        
     
     }
 }
