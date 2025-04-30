@@ -105,7 +105,7 @@ public class JavaParserManager implements AutoCloseable {
         }
     }
 
-    private List<Node> findMethods(Node rootNode) {
+    public List<Node> findMethods(Node rootNode) {
         List<Node> methods = new ArrayList<>();
         Queue<Node> queue = new LinkedList<>();
         queue.add(rootNode);
@@ -122,7 +122,7 @@ public class JavaParserManager implements AutoCloseable {
         return methods;
     }
 
-    private boolean hasReturnWithValue(Node methodNode) {
+    public boolean hasReturnWithValue(Node methodNode) {
         Queue<Node> queue = new LinkedList<>();
         queue.add(methodNode);
 
@@ -138,7 +138,7 @@ public class JavaParserManager implements AutoCloseable {
         return false;
     }
 
-    private String extractSource(Node node, byte[] bytes) {
+    public String extractSource(Node node, byte[] bytes) {
         int startByte = node.getStartByte();
         int endByte = node.getEndByte();
 
@@ -151,7 +151,7 @@ public class JavaParserManager implements AutoCloseable {
         return new String(Arrays.copyOfRange(bytes, startByte, endByte));
     }
 
-    private String findJavaDoc(Node methodNode, byte[] bytes) {
+    public String findJavaDoc(Node methodNode, byte[] bytes) {
         Node prev = methodNode.getPrevNamedSibling();
         int safeguard = 0;
         while (prev != null && safeguard++ < 100) {
@@ -176,4 +176,4 @@ public class JavaParserManager implements AutoCloseable {
             e.printStackTrace();
         }
     }
-} 
+}
