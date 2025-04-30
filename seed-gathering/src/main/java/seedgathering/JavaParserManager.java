@@ -67,15 +67,11 @@ public class JavaParserManager {
                 String methodName = extractSource(methodNameNode, bytes);
 
                 String javadoc = findJavaDoc(method, bytes);
+                String combined = ((javadoc != null ? javadoc : "") + "\n" + methodSource).trim();
                 Map<String, String> seed = new HashMap<>();
-                seed.put("path", javaFilePath.toString());
-                seed.put("method_name", methodName);
-                seed.put("code", methodSource);
-                // default to empty string if no javadoc found
-                seed.put("javadoc", javadoc != null ? javadoc : "");
+                seed.put("seed", combined);
                 seedWriter.write(seed);
-                System.out.println("Extracted seed from: " + methodName + " in " + javaFilePath.toString() +
-                        (javadoc != null ? " (with javadoc)" : " (no javadoc)"));
+                System.out.println("Extracted seed from: " + methodName);
             }
 
             tree.close();

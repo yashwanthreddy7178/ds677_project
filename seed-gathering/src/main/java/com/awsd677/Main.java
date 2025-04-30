@@ -3,6 +3,7 @@ package com.awsd677;
 import seedgathering.DatasetManager;
 import seedgathering.DownloadManager;
 import seedgathering.JavaParserManager;
+import seedgathering.SeedProcessor;
 
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ public class Main {
 
         // Download each file
         for (int i = 0; i < Math.min(5, metadataList.size()); i++) { // TEST: first 5 files
+        //for (int i = 0; i < metadataList.size(); i++) {   // No Test
             Map<String, String> entry = metadataList.get(i);
             downloadManager.downloadBlob(entry, outputDir);
         }
@@ -45,6 +47,9 @@ public class Main {
 
         System.out.println("Seed Gathering Step 3 Completed!");
 
-    
+        // step 2
+        System.out.println("Starting Seed Processing...");
+        SeedProcessor processor = new SeedProcessor();
+        processor.process("seeds/seeds.jsonl", "seeds/filtered_seeds.jsonl");
     }
 }
