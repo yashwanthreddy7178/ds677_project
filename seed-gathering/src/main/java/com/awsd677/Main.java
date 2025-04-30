@@ -38,7 +38,7 @@ public class Main {
         System.out.println("Downloaded some Java files. Seed Gathering Step 2 Completed!");
         
  
-         // After downloading blobs
+        // After downloading blobs
         System.out.println("Starting Java Parsing Phase...");
 
         JavaParserManager parserManager = new JavaParserManager("seeds/seeds.jsonl");
