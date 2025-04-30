@@ -1,13 +1,10 @@
-// JavaParserManager.java
 package seedgathering;
 
 import ch.usi.si.seart.treesitter.*;
 import ch.usi.si.seart.treesitter.exception.parser.ParsingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SequenceWriter;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
@@ -16,7 +13,7 @@ import java.util.stream.Stream;
 public class JavaParserManager implements AutoCloseable {
 
     private final ObjectMapper mapper = new ObjectMapper();
-    private final SequenceWriter seedWriter;
+    private final BufferedWriter writer;
 
     public JavaParserManager(String outputSeedPath) {
         try {
@@ -26,7 +23,7 @@ public class JavaParserManager implements AutoCloseable {
             // Prepare output file
             File seedFile = new File(outputSeedPath);
             seedFile.getParentFile().mkdirs();
-            seedWriter = mapper.writer().writeValues(seedFile);
+            writer = new BufferedWriter(new FileWriter(seedFile));
 
         } catch (IOException e) {
             throw new RuntimeException("Failed to initialize JavaParserManager", e);
@@ -53,12 +50,12 @@ public class JavaParserManager implements AutoCloseable {
         try {
             String content = Files.readString(javaFilePath);
 
-            if (content.length() > 50000) {
-                System.out.println("Skipping huge file: " + javaFilePath.toString());
-                return;
-            }
+            //if (content.length() > 50000) {
+            //    System.out.println("Skipping huge file: " + javaFilePath.toString());
+            //    return;
+            //}
 
-            Parser parser = Parser.getFor(Language.JAVA); // ✅ per-file parser instance
+            Parser parser = Parser.getFor(Language.JAVA);
             Tree tree = parser.parse(content);
             byte[] bytes = content.getBytes();
             Node rootNode = tree.getRootNode();
@@ -69,7 +66,6 @@ public class JavaParserManager implements AutoCloseable {
                 try {
                     String javadoc = findJavaDoc(method, bytes);
                     if (javadoc == null || javadoc.trim().isEmpty()) continue;
-
                     if (!hasReturnWithValue(method)) continue;
 
                     String methodSource = extractSource(method, bytes);
@@ -84,12 +80,13 @@ public class JavaParserManager implements AutoCloseable {
                     seed.put("method_name", methodName);
                     seed.put("content", fullContent);
 
-                    // ✅ Validate content before writing
                     if (methodName != null && !methodName.isBlank() &&
                         methodSource != null && !methodSource.isBlank() &&
                         javadoc != null && !javadoc.isBlank()) {
 
-                        seedWriter.write(seed);
+                        String json = mapper.writeValueAsString(seed);
+                        writer.write(json);
+                        writer.newLine(); // ✅ ensures JSONL
                         System.out.println("Extracted seed from: " + methodName + " in " + javaFilePath.toString());
                     } else {
                         System.err.println("Skipping invalid seed for: " + javaFilePath);
@@ -142,9 +139,8 @@ public class JavaParserManager implements AutoCloseable {
         int startByte = node.getStartByte();
         int endByte = node.getEndByte();
 
-        // FIXED: Handle invalid byte ranges safely
         if (startByte < 0 || endByte > bytes.length || endByte < startByte) {
-            System.err.println("Invalid byte range: start=" + startByte + ", end=" + endByte + ", length=" + bytes.length);
+            System.err.println("Invalid byte range: start=" + startByte + ", end=" + endByte);
             return "";
         }
 
@@ -169,9 +165,7 @@ public class JavaParserManager implements AutoCloseable {
     @Override
     public void close() {
         try {
-            if (seedWriter != null) {
-                seedWriter.close();
-            }
+            if (writer != null) writer.close(); // ✅ flushes all content
         } catch (IOException e) {
             e.printStackTrace();
         }

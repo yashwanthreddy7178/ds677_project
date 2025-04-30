@@ -1,79 +1,106 @@
-// JavaSeedFilter.java
 package seedgathering;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SequenceWriter;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.io.*;
-import java.nio.file.Files;
 import java.util.*;
 import java.util.regex.Pattern;
 
 public class JavaSeedFilter {
 
-    private static final int MAX_LINES = 150;
+    private static final int MAX_LINES = 1500;
     private static final List<String> BAD_WORDS = Arrays.asList("todo", "fixme", "bug");
     private static final List<String> BAD_IMPORTS = Arrays.asList(
             "import java.io", "import java.lang.reflect", "import java.net", "import java.nio", "import java.security"
     );
 
+    private static final Map<String, Integer> rejectionStats = new HashMap<>();
+
     public static void main(String[] args) {
         String inputJsonl = "seeds/seeds.jsonl";
         String outputJsonl = "seeds/filtered_seeds.jsonl";
 
+        ObjectMapper mapper = new ObjectMapper();
+
         try (BufferedReader reader = new BufferedReader(new FileReader(inputJsonl));
-             SequenceWriter writer = new ObjectMapper().writer().writeValues(new File(outputJsonl))) {
+             BufferedWriter writer = new BufferedWriter(new FileWriter(outputJsonl))) {
 
-            ObjectMapper mapper = new ObjectMapper();
-            int total = 0;
-            int kept = 0;
-
+            int total = 0, kept = 0;
             String line;
             while ((line = reader.readLine()) != null) {
                 total++;
-                ObjectNode obj = (ObjectNode) mapper.readTree(line);
-                String content = obj.has("content") && obj.get("content") != null ? obj.get("content").asText() : null;
-                if (content == null) continue;
+
+                JsonNode node = mapper.readTree(line);
+                if (node == null || node.isMissingNode() || !node.isObject()) {
+                    increment("Invalid or empty line");
+                    continue;
+                }
+
+                ObjectNode obj = (ObjectNode) node;
+                String content = obj.has("content") ? obj.get("content").asText() : null;
+
+                if (content == null || content.isBlank()) {
+                    increment("Blank content");
+                    continue;
+                }
 
                 if (!isValid(content)) continue;
 
-                writer.write(obj);
+                writer.write(mapper.writeValueAsString(obj));
+                writer.newLine(); // ✅ ensure JSONL
                 kept++;
             }
 
-            System.out.println("✅ Substep 2 Completed: " + kept + " / " + total + " seeds kept");
+            writer.flush(); // ✅ important!
+            System.out.println("✅ Substep 2 Debug Completed: " + kept + " / " + total + " seeds kept");
+            System.out.println("📊 Rejection breakdown:");
+            rejectionStats.forEach((reason, count) ->
+                System.out.printf("  - %-30s : %d%n", reason, count)
+            );
+
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     private static boolean isValid(String content) {
-        if (content == null || content.isBlank()) return false;
-
-        // Line count check
         long lines = content.lines().count();
-        if (lines > MAX_LINES) return false;
+        if (lines > MAX_LINES) {
+            increment("Too many lines");
+            return false;
+        }
 
-        // Must contain return statement with a value
-        if (!Pattern.compile("\\breturn\\b.*;").matcher(content).find()) return false;
+        if (!content.contains("/**") || !content.contains("*/")) {
+            increment("Missing Javadoc");
+            return false;
+        }
 
-        // Must contain /** and */ (javadoc)
-        if (!content.contains("/**") || !content.contains("*/")) return false;
+        if (!Pattern.compile("\\breturn\\b.*;").matcher(content).find()) {
+            increment("Missing return");
+            return false;
+        }
 
-        // Must not contain TODO/FIXME/BUG
         String lower = content.toLowerCase();
         for (String bad : BAD_WORDS) {
-            if (lower.contains(bad)) return false;
+            if (lower.contains(bad)) {
+                increment("Contains bad word: " + bad);
+                return false;
+            }
         }
 
-        // Must not import bad packages
         for (String imp : BAD_IMPORTS) {
-            if (content.contains(imp)) return false;
+            if (content.contains(imp)) {
+                increment("Contains bad import: " + imp);
+                return false;
+            }
         }
-
-        // Must have method with parameters (avoid `method()` )
-        if (Pattern.compile("\\(\\s*\\)").matcher(content).find()) return false;
 
         return true;
+    }
+
+    private static void increment(String reason) {
+        rejectionStats.merge(reason, 1, Integer::sum);
     }
 }
