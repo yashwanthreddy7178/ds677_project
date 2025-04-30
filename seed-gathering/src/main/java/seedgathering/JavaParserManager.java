@@ -1,6 +1,7 @@
 package seedgathering;
 
 import ch.usi.si.seart.treesitter.*;
+import ch.usi.si.seart.treesitter.exception.parser.ParsingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SequenceWriter;
 
@@ -26,8 +27,7 @@ public class JavaParserManager {
             seedWriter = mapper.writer().writeValues(seedFile);
 
             // Initialize Tree-sitter Parser
-            parser = new Parser();
-            parser.setLanguage(Language.load("tree-sitter-java"));
+            parser = Parser.getFor(Language.JAVA);
 
         } catch (IOException e) {
             throw new RuntimeException("Failed to initialize JavaParserManager", e);
@@ -54,7 +54,7 @@ public class JavaParserManager {
             }
 
             byte[] bytes = content.getBytes();
-            Tree tree = parser.parse(bytes);
+            Tree tree = parser.parse(javaFilePath);
             Node rootNode = tree.getRootNode();
 
             List<Node> methods = findMethods(rootNode);
@@ -64,24 +64,22 @@ public class JavaParserManager {
                 Node methodNameNode = method.getChildByFieldName("name");
 
                 if (methodNameNode == null) continue;
-                String methodName = methodNameNode.getText();
+                String methodName = extractSource(methodNameNode, bytes);
 
                 String javadoc = findJavaDoc(method, bytes);
-
-                if (javadoc != null) {
-                    Map<String, String> seed = new HashMap<>();
-                    seed.put("path", javaFilePath.toString());
-                    seed.put("method_name", methodName);
-                    seed.put("code", methodSource);
-                    seed.put("javadoc", javadoc);
-
-                    seedWriter.write(seed);
-                    System.out.println("Extracted seed from: " + methodName + " in " + javaFilePath.toString());
-                }
+                Map<String, String> seed = new HashMap<>();
+                seed.put("path", javaFilePath.toString());
+                seed.put("method_name", methodName);
+                seed.put("code", methodSource);
+                // default to empty string if no javadoc found
+                seed.put("javadoc", javadoc != null ? javadoc : "");
+                seedWriter.write(seed);
+                System.out.println("Extracted seed from: " + methodName + " in " + javaFilePath.toString() +
+                        (javadoc != null ? " (with javadoc)" : " (no javadoc)"));
             }
 
             tree.close();
-        } catch (IOException e) {
+        } catch (IOException | ParsingException e) {
             e.printStackTrace();
         }
     }
@@ -113,7 +111,8 @@ public class JavaParserManager {
     private String findJavaDoc(Node methodNode, byte[] bytes) {
         Node prev = methodNode.getPrevNamedSibling();
         while (prev != null) {
-            if ("comment".equals(prev.getType())) {
+            // match any comment type (including block_comment for JavaDoc)
+            if (prev.getType().endsWith("comment")) {
                 String comment = extractSource(prev, bytes);
                 if (comment.trim().startsWith("/**")) {
                     return comment;
