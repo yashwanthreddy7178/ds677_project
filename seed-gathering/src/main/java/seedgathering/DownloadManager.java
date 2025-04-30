@@ -1,3 +1,4 @@
+// DownloadManager.java
 package seedgathering;
 
 import java.io.*;
@@ -18,13 +19,24 @@ public class DownloadManager {
         String blobId = metadata.get("blob_id");
         String encoding = metadata.getOrDefault("src_encoding", "UTF-8");
         String path = metadata.get("path");
-        
+
         if (blobId == null || path == null) {
             System.out.println("Invalid metadata: missing blob_id or path.");
             return;
         }
 
         try {
+            // Build safe filename
+            String filenameOnly = Paths.get(path).getFileName().toString();
+            String safePath = filenameOnly.replaceAll("[^a-zA-Z0-9\\.\\-]", "_");
+            File outputFile = new File(outputDir, safePath);
+
+            // Skip download if file already exists
+            if (outputFile.exists()) {
+                System.out.println("Already downloaded: " + outputFile.getPath());
+                return;
+            }
+
             // Build the download URL
             String blobUrl = S3_BASE_URL + blobId;
             URL url = new URL(blobUrl);
@@ -38,11 +50,6 @@ public class DownloadManager {
                 InputStreamReader reader = new InputStreamReader(gzipInputStream, encoding);
                 BufferedReader bufferedReader = new BufferedReader(reader);
 
-                // Prepare output file
-                String filenameOnly = Paths.get(path).getFileName().toString(); // Get only filename
-                String safePath = filenameOnly.replaceAll("[^a-zA-Z0-9\\.\\-]", "_"); // Safer filename
-
-                File outputFile = new File(outputDir, safePath);
                 outputFile.getParentFile().mkdirs(); // Create directories
 
                 // Write to output file
@@ -66,4 +73,4 @@ public class DownloadManager {
             e.printStackTrace();
         }
     }
-}
+} 
