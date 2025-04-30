@@ -1,1 +1,1 @@
-{"seed":"public void addUserOnlinePresenceListener(RawUserOnlinePresenceListener listener) {\n        mOnlinePresenceListeners.add(listener);\n    }"}
+{"seed":"@Override\n    public List<GenerateModel> load() {\n        try {\n            return new ObjectMapper().readValue(new File(path), new TypeReference<List<GenerateModel>>() {});\n        } catch (IOException e) {\n            e.printStackTrace();\n        }\n        return null;\n    }"}
