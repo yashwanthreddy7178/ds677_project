@@ -79,28 +79,49 @@ public class Main {
 
         System.out.println("✅ Files downloaded. Proceeding to Java parsing...");
 
-        try (JavaParserManager parserManager = new JavaParserManager("seeds/seeds.jsonl")) {
-            parserManager.parseAllJavaFiles(outputDir);
-        } catch (Exception e) {
-            e.printStackTrace();
+        File seedsFile = new File("seeds/seeds.jsonl");
+        if (!seedsFile.exists()) {
+            try (JavaParserManager parserManager = new JavaParserManager("seeds/seeds.jsonl")) {
+                parserManager.parseAllJavaFiles(outputDir);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("✅ seeds.jsonl found. Skipping Java parsing.");
         }
 
         System.out.println("🔎 Running Static Filter (Substep 2)...");
-        JavaSeedFilter.main(null);
+        File filteredSeedsFile = new File("seeds/filtered_seeds.jsonl");
+        if (!filteredSeedsFile.exists()) {
+            JavaSeedFilter.main(null);
+        } else {
+            System.out.println("✅ filtered_seeds.jsonl found. Skipping static filter.");
+        }
 
         System.out.println("🧪 Running Type Checker...");
-        try {
-            JavaTypeChecker.runTypeCheck("seeds/filtered_seeds.jsonl", "seeds/typecheck_seeds.jsonl");
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
+        File typecheckSeedsFile = new File("seeds/typecheck_seeds.jsonl");
+        if (!typecheckSeedsFile.exists()) {
+            try {
+                JavaTypeChecker.runTypeCheck("seeds/filtered_seeds.jsonl", "seeds/typecheck_seeds.jsonl");
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("✅ typecheck_seeds.jsonl found. Skipping type check.");
         }
-        System.out.println("✅ Type Check completed. Proceeding to LLM Semantic Filter...");        
+
+        System.out.println("✅ Type Check completed. Proceeding to LLM Semantic Filter...");
 
         System.out.println("🤖 Running LLM Semantic Filter (Substep 3)...");
-        try {
-            LLMSemanticFilter.main(null);
-        } catch (Exception e) {
-            e.printStackTrace();
+        File llmVerifiedFile = new File("seeds/llm_verified_seeds.jsonl");
+        if (!llmVerifiedFile.exists()) {
+            try {
+                LLMSemanticFilter.main(null);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("✅ llm_verified_seeds.jsonl found. Skipping LLM filter.");
         }
 
         System.out.println("🎉 All steps completed. Final verified seeds in seeds/llm_verified_seeds.jsonl");
