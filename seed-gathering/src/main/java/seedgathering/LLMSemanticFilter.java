@@ -1,10 +1,8 @@
-// LLMSemanticFilter.java
 package seedgathering;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.SequenceWriter;
 import okhttp3.*;
 
 import java.io.*;
@@ -21,23 +19,41 @@ public class LLMSemanticFilter {
         String outputPath = "seeds/llm_verified_seeds.jsonl";
 
         ObjectMapper mapper = new ObjectMapper();
-        try (BufferedReader reader = new BufferedReader(new FileReader(inputPath));
-             SequenceWriter writer = mapper.writer().writeValues(new File(outputPath))) {
+        int total = 0, kept = 0, apiCalls = 0;
 
-            int total = 0, kept = 0;
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputPath));
+             BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+
             String line;
             while ((line = reader.readLine()) != null) {
                 total++;
-                ObjectNode obj = (ObjectNode) mapper.readTree(line);
-                String content = obj.get("content").asText();
+                JsonNode node = mapper.readTree(line);
+                if (node == null || node.isMissingNode() || !node.isObject()) continue;
 
-                if (askLLM(content)) {
-                    writer.write(obj);
-                    kept++;
+                ObjectNode obj = (ObjectNode) node;
+                String content = obj.get("content").asText();
+                String method = obj.has("method_name") ? obj.get("method_name").asText() : "<unknown>";
+
+                System.out.println("🔍 Checking with LLM: " + method);
+
+                try {
+                    if (askLLM(content)) {
+                        writer.write(mapper.writeValueAsString(obj));
+                        writer.newLine();
+                        kept++;
+                    }
+                    apiCalls++;
+                } catch (Exception e) {
+                    System.err.println("❌ API request failed for " + method + ": " + e.getMessage());
                 }
             }
-            System.out.println("✅ Substep 3 Completed: " + kept + " / " + total + " kept");
         }
+
+        System.out.println("✅ Substep 3 Completed: " + kept + " / " + total + " kept");
+        System.out.println("📊 Total OpenAI requests made: " + apiCalls);
+
+        client.dispatcher().executorService().shutdown();
+        client.connectionPool().evictAll();
     }
 
     private static boolean askLLM(String content) throws IOException {
@@ -61,12 +77,34 @@ public class LLMSemanticFilter {
                 .post(body)
                 .build();
 
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) return false;
-            JsonNode json = mapper.readTree(response.body().string());
-            String reply = json.get("choices").get(0).get("message").get("content").asText().toLowerCase();
-            return reply.contains("yes") && !reply.contains("no");
+        for (int retry = 0; retry < 5; retry++) {
+            try (Response response = client.newCall(request).execute()) {
+                if (response.code() == 429) {
+                    System.err.println("⏳ Rate limit hit, retrying in 5s...");
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return false;
+                    }
+                    continue;
+                }
+                if (!response.isSuccessful()) {
+                    System.err.println("⚠️ LLM response failed: " + response.code() + " - " + response.message());
+                    return false;
+                }
+                JsonNode json = mapper.readTree(response.body().string());
+                String reply = json.get("choices").get(0).get("message").get("content").asText().toLowerCase();
+                try {
+                    Thread.sleep(2000); // Throttle each call to prevent 429
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+                return reply.contains("yes") && !reply.contains("no");
+            }
         }
+        return false;
     }
 
     private static String buildPrompt(String content) {
