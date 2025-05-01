@@ -89,7 +89,12 @@ public class Main {
         JavaSeedFilter.main(null);
 
         System.out.println("🧪 Running Type Checker...");
-        runTypeCheck("seeds/filtered_seeds.jsonl", "seeds/typecheck_seeds.jsonl");
+        try {
+            JavaTypeChecker.runTypeCheck("seeds/filtered_seeds.jsonl", "seeds/typecheck_seeds.jsonl");
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+        System.out.println("✅ Type Check completed. Proceeding to LLM Semantic Filter...");        
 
         System.out.println("🤖 Running LLM Semantic Filter (Substep 3)...");
         try {
@@ -99,27 +104,5 @@ public class Main {
         }
 
         System.out.println("🎉 All steps completed. Final verified seeds in seeds/llm_verified_seeds.jsonl");
-    }
-
-    private static void runTypeCheck(String input, String output) {
-        ObjectMapper mapper = new ObjectMapper();
-        try (BufferedReader reader = new BufferedReader(new FileReader(input));
-             SequenceWriter writer = mapper.writer().writeValues(new File(output))) {
-
-            String line;
-            int total = 0, kept = 0;
-            while ((line = reader.readLine()) != null) {
-                total++;
-                ObjectNode obj = (ObjectNode) mapper.readTree(line);
-                String content = obj.get("content").asText();
-                if (JavaTypeChecker.compiles(content)) {
-                    writer.write(obj);
-                    kept++;
-                }
-            }
-            System.out.println("✅ TypeCheck Completed: " + kept + "/" + total + " seeds kept");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 }
