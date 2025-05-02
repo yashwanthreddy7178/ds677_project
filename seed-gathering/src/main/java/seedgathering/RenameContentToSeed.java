@@ -3,7 +3,6 @@ package seedgathering;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.SequenceWriter;
 
 import java.io.*;
 
@@ -15,23 +14,30 @@ public class RenameContentToSeed {
 
         ObjectMapper mapper = new ObjectMapper();
         try (BufferedReader reader = new BufferedReader(new FileReader(inputPath));
-             SequenceWriter writer = mapper.writer().writeValues(new File(outputPath))) {
+             BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
 
             String line;
             int converted = 0;
 
             while ((line = reader.readLine()) != null) {
-                ObjectNode obj = (ObjectNode) mapper.readTree(line);
+                JsonNode node = mapper.readTree(line);
+                if (node != null && node.isObject()) {
+                    ObjectNode obj = (ObjectNode) node;
 
-                if (obj.has("content")) {
-                    String value = obj.remove("content").asText();
-                    obj.put("seed", value);
-                    writer.write(obj);
-                    converted++;
+                    if (obj.has("content")) {
+                        String value = obj.remove("content").asText();
+                        obj.put("seed", value);
+                        writer.write(mapper.writeValueAsString(obj));
+                        writer.newLine();
+                        converted++;
+                    } else {
+                        writer.write(line);
+                        writer.newLine();
+                    }
                 }
             }
 
             System.out.println("✅ Renaming completed: " + converted + " entries converted.");
         }
     }
-}
+} 
