@@ -7,6 +7,7 @@ import seedgathering.JavaParserManager;
 import seedgathering.JavaSeedFilter;
 import seedgathering.JavaTypeChecker;
 import seedgathering.LLMSemanticFilter;
+import seedgathering.RenameContentToSeed;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SequenceWriter;
@@ -110,8 +111,6 @@ public class Main {
             System.out.println("✅ typecheck_seeds.jsonl found. Skipping type check.");
         }
 
-        System.out.println("✅ Type Check completed. Proceeding to LLM Semantic Filter...");
-
         System.out.println("🤖 Running LLM Semantic Filter (Substep 3)...");
         File llmVerifiedFile = new File("seeds/llm_verified_seeds.jsonl");
         if (!llmVerifiedFile.exists()) {
@@ -124,6 +123,13 @@ public class Main {
             System.out.println("✅ llm_verified_seeds.jsonl found. Skipping LLM filter.");
         }
 
-        System.out.println("🎉 All steps completed. Final verified seeds in seeds/llm_verified_seeds.jsonl");
+        System.out.println("✅ LLM filter complete. Proceeding to RenameContentToSeed step...");
+        try {
+            RenameContentToSeed.main(null);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        System.out.println("🎉 All steps completed. Final verified seeds in seeds/final_seeds.jsonl");
     }
 }
