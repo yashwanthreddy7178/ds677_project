@@ -35,7 +35,7 @@ public class JavaTypeChecker {
                     if (node == null || node.isMissingNode() || !node.isObject()) return null;
 
                     ObjectNode obj = (ObjectNode) node;
-                    String content = obj.get("content").asText();
+                    String content = obj.has("content") ? obj.get("content").asText() : obj.get("seed").asText();
 
                     if (compiles(content)) {
                         keptCount.incrementAndGet();
@@ -89,7 +89,7 @@ public class JavaTypeChecker {
             String line;
 
             while ((line = reader.readLine()) != null) {
-                if (!line.contains("cannot find symbol")) {
+                if (!line.contains("cannot find symbol") && !line.contains("package does not exist")) {
                     onlySymbolErrors = false;
                 }
             }

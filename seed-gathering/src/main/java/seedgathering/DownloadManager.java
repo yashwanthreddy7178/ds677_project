@@ -11,10 +11,8 @@ import java.util.Map;
 
 public class DownloadManager {
 
-    // Software Heritage S3 base URL
     private static final String S3_BASE_URL = "https://softwareheritage.s3.amazonaws.com/content/";
 
-    // Downloads, decompresses, decodes, and saves one Java file
     public void downloadBlob(Map<String, String> metadata, String outputDir) {
         String blobId = metadata.get("blob_id");
         String encoding = metadata.getOrDefault("src_encoding", "UTF-8");
@@ -26,18 +24,13 @@ public class DownloadManager {
         }
 
         try {
-            // Build safe filename
-            String filenameOnly = Paths.get(path).getFileName().toString();
-            String safePath = filenameOnly.replaceAll("[^a-zA-Z0-9\\.\\-]", "_");
-            File outputFile = new File(outputDir, safePath);
+            File outputFile = new File(outputDir, path);
 
-            // Skip download if file already exists
             if (outputFile.exists()) {
                 System.out.println("Already downloaded: " + outputFile.getPath());
                 return;
             }
 
-            // Build the download URL
             String blobUrl = S3_BASE_URL + blobId;
             URL url = new URL(blobUrl);
 
@@ -45,14 +38,12 @@ public class DownloadManager {
             connection.setRequestMethod("GET");
 
             if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
-                // Decompress GZIP
                 GZIPInputStream gzipInputStream = new GZIPInputStream(connection.getInputStream());
                 InputStreamReader reader = new InputStreamReader(gzipInputStream, encoding);
                 BufferedReader bufferedReader = new BufferedReader(reader);
 
-                outputFile.getParentFile().mkdirs(); // Create directories
+                outputFile.getParentFile().mkdirs();
 
-                // Write to output file
                 try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(outputFile), StandardCharsets.UTF_8))) {
                     String line;
                     while ((line = bufferedReader.readLine()) != null) {
