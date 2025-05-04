@@ -1,56 +1,115 @@
 package seedgathering;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
-public class TypeChecker {
+import java.io.*;
+import java.nio.file.*;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.*;
 
-    private final File tempFolder;
+public class JavaTypeChecker {
 
-    public TypeChecker() {
-        tempFolder = new File("temp_mypy");
-        if (!tempFolder.exists()) {
-            tempFolder.mkdirs();
+    private static final int THREADS = 2; // ✅ LIMIT threads to reduce CPU usage
+    private static final ObjectMapper mapper = new ObjectMapper();
+
+    public static void runTypeCheck(String inputPath, String outputPath) throws IOException, InterruptedException {
+        List<String> lines = Files.readAllLines(Paths.get(inputPath));
+        int total = lines.size();
+
+        ExecutorService executor = Executors.newFixedThreadPool(THREADS);
+        List<Future<String>> results = new CopyOnWriteArrayList<>();
+
+        AtomicInteger index = new AtomicInteger(0);
+        AtomicInteger keptCount = new AtomicInteger(0);
+
+        for (String line : lines) {
+            int currentIndex = index.incrementAndGet();
+
+            results.add(executor.submit(() -> {
+                try {
+                    JsonNode node = mapper.readTree(line);
+                    if (node == null || node.isMissingNode() || !node.isObject()) return null;
+
+                    ObjectNode obj = (ObjectNode) node;
+                    String content = obj.has("content") ? obj.get("content").asText() : obj.get("seed").asText();
+
+                    if (compiles(content)) {
+                        keptCount.incrementAndGet();
+                        if (currentIndex % 100 == 0 || currentIndex == total) {
+                            System.out.println("✅ TypeChecked seed " + currentIndex + " / " + total + " (kept: " + keptCount.get() + ")");
+                        }
+                        return mapper.writeValueAsString(obj);
+                    }
+                } catch (Exception e) {
+                    // skip
+                }
+                return null;
+            }));
         }
+
+        executor.shutdown();
+        executor.awaitTermination(30, TimeUnit.MINUTES);
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+            for (Future<String> result : results) {
+                String json = result.get();
+                if (json != null) {
+                    writer.write(json);
+                    writer.newLine();
+                }
+            }
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+
+        System.out.println("\n✅ TypeCheck Completed: " + keptCount.get() + " / " + total + " seeds kept");
     }
 
-    /**
-     * Typechecks the given function code using mypy.
-     *
-     * @param functionCode Python function code as a String
-     * @return true if typechecking passed, false otherwise
-     */
-    public boolean typeCheckFunction(String functionCode) {
+    private static boolean compiles(String content) {
         try {
-            // Create temporary file
-            File tempFile = File.createTempFile("func_", ".py", tempFolder);
-            try (FileWriter writer = new FileWriter(tempFile)) {
-                writer.write(functionCode);
-            }
+            String className = extractClassName(content);
+            if (className == null) className = "TempClass";
 
-            // Run mypy
-            ProcessBuilder pb = new ProcessBuilder("mypy", "--ignore-missing-imports", tempFile.getAbsolutePath());
-            pb.redirectErrorStream(true); // combine stdout + stderr
-            Process process = pb.start();
+            String fullCode = "public class " + className + " {\n" + content + "\n}";
+
+            Path tempDir = Files.createTempDirectory("typecheck");
+            File javaFile = new File(tempDir.toFile(), className + ".java");
+            Files.writeString(javaFile.toPath(), fullCode);
+
+            Process process = new ProcessBuilder("javac", javaFile.getAbsolutePath())
+                    .redirectErrorStream(true)
+                    .start();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            boolean onlySymbolErrors = true;
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                if (!line.contains("cannot find symbol") && !line.contains("package does not exist")) {
+                    onlySymbolErrors = false;
+                }
+            }
 
             int exitCode = process.waitFor();
 
-            tempFile.delete();  // clean up after checking
+            // Clean up
+            new File(tempDir.toFile(), className + ".class").delete();
+            javaFile.delete();
+            tempDir.toFile().delete();
 
-            return exitCode == 0;  // mypy returns 0 if no errors
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
+            return exitCode == 0 || onlySymbolErrors;
+
+        } catch (Exception e) {
             return false;
         }
     }
 
-    public void cleanUp() {
-        if (tempFolder.exists()) {
-            for (File file : tempFolder.listFiles()) {
-                file.delete();
-            }
-            tempFolder.delete();
-        }
+    private static String extractClassName(String content) {
+        Matcher matcher = Pattern.compile("class\\s+(\\w+)").matcher(content);
+        return matcher.find() ? matcher.group(1) : null;
     }
 }

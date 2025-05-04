@@ -1,33 +1,33 @@
+// JavaParserManager.java
 package seedgathering;
 
 import ch.usi.si.seart.treesitter.*;
 import ch.usi.si.seart.treesitter.exception.parser.ParsingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SequenceWriter;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.ForkJoinPool;
+import java.util.stream.Stream;
 
-public class JavaParserManager {
+public class JavaParserManager implements AutoCloseable {
 
     private final ObjectMapper mapper = new ObjectMapper();
-    private final SequenceWriter seedWriter;
-    private final Parser parser;
+    private final BufferedWriter writer;
+
+    private int fileCount = 0;
+    private int seedCount = 0;
+    private int filterSkipped = 0;
+    private int errorSkipped = 0;
 
     public JavaParserManager(String outputSeedPath) {
         try {
-            // Load native Tree-sitter library
             LibraryLoader.load();
 
-            // Prepare output file
             File seedFile = new File(outputSeedPath);
             seedFile.getParentFile().mkdirs();
-            seedWriter = mapper.writer().writeValues(seedFile);
-
-            // Initialize Tree-sitter Parser
-            parser = Parser.getFor(Language.JAVA);
+            writer = new BufferedWriter(new FileWriter(seedFile));
 
         } catch (IOException e) {
             throw new RuntimeException("Failed to initialize JavaParserManager", e);
@@ -35,52 +35,91 @@ public class JavaParserManager {
     }
 
     public void parseAllJavaFiles(String inputDir) {
-        try {
-            Files.walk(Paths.get(inputDir))
-                    .filter(path -> path.toString().endsWith(".java"))
-                    .forEach(this::parseJavaFile);
-        } catch (IOException e) {
+        try (Stream<Path> fileStream = Files.walk(Paths.get(inputDir))) {
+            ForkJoinPool forkJoinPool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
+
+            forkJoinPool.submit(() ->
+                fileStream.parallel()
+                          .filter(path -> path.toString().endsWith(".java"))
+                          .forEach(this::parseJavaFile)
+            ).get();
+
+            forkJoinPool.shutdown();
+
+            System.out.println("\n📊 Parsing Summary:");
+            System.out.println("📄 Total files scanned: " + fileCount);
+            System.out.println("✅ Total methods written: " + seedCount);
+            System.out.println("🚫 Skipped due to missing javadoc or return: " + filterSkipped);
+            System.out.println("❌ Skipped due to Tree-sitter error: " + errorSkipped);
+
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     private void parseJavaFile(Path javaFilePath) {
+        fileCount++;
         try {
             String content = Files.readString(javaFilePath);
 
-            if (content.length() > 50000) {
-                System.out.println("Skipping huge file: " + javaFilePath.toString());
-                return;
-            }
-
+            Parser parser = Parser.getFor(Language.JAVA);
+            Tree tree = parser.parse(content);
             byte[] bytes = content.getBytes();
-            Tree tree = parser.parse(javaFilePath);
             Node rootNode = tree.getRootNode();
 
             List<Node> methods = findMethods(rootNode);
 
             for (Node method : methods) {
-                String methodSource = extractSource(method, bytes);
-                Node methodNameNode = method.getChildByFieldName("name");
+                try {
+                    String javadoc = findJavaDoc(method, bytes);
+                    if (javadoc == null || javadoc.trim().isEmpty()) {
+                        filterSkipped++;
+                        continue;
+                    }
+                    if (!hasReturnWithValue(method)) {
+                        filterSkipped++;
+                        continue;
+                    }
 
-                if (methodNameNode == null) continue;
-                String methodName = extractSource(methodNameNode, bytes);
+                    String methodSource = extractSource(method, bytes);
+                    Node methodNameNode = method.getChildByFieldName("name");
+                    if (methodNameNode == null) {
+                        filterSkipped++;
+                        continue;
+                    }
 
-                String javadoc = findJavaDoc(method, bytes);
-                String combined = ((javadoc != null ? javadoc : "") + "\n" + methodSource).trim();
-                Map<String, String> seed = new HashMap<>();
-                seed.put("seed", combined);
-                seedWriter.write(seed);
-                System.out.println("Extracted seed from: " + methodName);
+                    String methodName = extractSource(methodNameNode, bytes);
+                    String fullContent = javadoc + "\n" + methodSource;
+
+                    Map<String, String> seed = new HashMap<>();
+                    seed.put("path", javaFilePath.toString());
+                    seed.put("method_name", methodName);
+                    seed.put("content", fullContent);
+
+                    if (methodName != null && !methodName.isBlank() &&
+                        methodSource != null && !methodSource.isBlank() &&
+                        javadoc != null && !javadoc.isBlank()) {
+
+                        String json = mapper.writeValueAsString(seed);
+                        writer.write(json);
+                        writer.newLine();
+                        seedCount++;
+                        System.out.println("Extracted seed from: " + methodName + " in " + javaFilePath.toString());
+                    } else {
+                        filterSkipped++;
+                    }
+                } catch (Exception | Error e) {
+                    errorSkipped++;
+                }
             }
 
             tree.close();
         } catch (IOException | ParsingException e) {
-            e.printStackTrace();
+            errorSkipped++;
         }
     }
 
-    private List<Node> findMethods(Node rootNode) {
+    public List<Node> findMethods(Node rootNode) {
         List<Node> methods = new ArrayList<>();
         Queue<Node> queue = new LinkedList<>();
         queue.add(rootNode);
@@ -94,20 +133,41 @@ public class JavaParserManager {
                 queue.add(current.getChild(i));
             }
         }
-
         return methods;
     }
 
-    private String extractSource(Node node, byte[] bytes) {
+    public boolean hasReturnWithValue(Node methodNode) {
+        Queue<Node> queue = new LinkedList<>();
+        queue.add(methodNode);
+
+        while (!queue.isEmpty()) {
+            Node current = queue.poll();
+            if ("return_statement".equals(current.getType()) && current.getChildCount() > 1) {
+                return true;
+            }
+            for (int i = 0; i < current.getChildCount(); i++) {
+                queue.add(current.getChild(i));
+            }
+        }
+        return false;
+    }
+
+    public String extractSource(Node node, byte[] bytes) {
         int startByte = node.getStartByte();
         int endByte = node.getEndByte();
+
+        if (startByte < 0 || endByte > bytes.length || endByte < startByte) {
+            System.err.println("Invalid byte range: start=" + startByte + ", end=" + endByte);
+            return "";
+        }
+
         return new String(Arrays.copyOfRange(bytes, startByte, endByte));
     }
 
-    private String findJavaDoc(Node methodNode, byte[] bytes) {
+    public String findJavaDoc(Node methodNode, byte[] bytes) {
         Node prev = methodNode.getPrevNamedSibling();
-        while (prev != null) {
-            // match any comment type (including block_comment for JavaDoc)
+        int safeguard = 0;
+        while (prev != null && safeguard++ < 100) {
             if (prev.getType().endsWith("comment")) {
                 String comment = extractSource(prev, bytes);
                 if (comment.trim().startsWith("/**")) {
@@ -119,11 +179,10 @@ public class JavaParserManager {
         return null;
     }
 
+    @Override
     public void close() {
         try {
-            if (seedWriter != null) {
-                seedWriter.close();
-            }
+            if (writer != null) writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         }

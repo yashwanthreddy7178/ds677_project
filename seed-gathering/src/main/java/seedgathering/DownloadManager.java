@@ -1,3 +1,4 @@
+// DownloadManager.java
 package seedgathering;
 
 import java.io.*;
@@ -10,22 +11,26 @@ import java.util.Map;
 
 public class DownloadManager {
 
-    // Software Heritage S3 base URL
     private static final String S3_BASE_URL = "https://softwareheritage.s3.amazonaws.com/content/";
 
-    // Downloads, decompresses, decodes, and saves one Java file
     public void downloadBlob(Map<String, String> metadata, String outputDir) {
         String blobId = metadata.get("blob_id");
         String encoding = metadata.getOrDefault("src_encoding", "UTF-8");
         String path = metadata.get("path");
-        
+
         if (blobId == null || path == null) {
             System.out.println("Invalid metadata: missing blob_id or path.");
             return;
         }
 
         try {
-            // Build the download URL
+            File outputFile = new File(outputDir, path);
+
+            if (outputFile.exists()) {
+                System.out.println("Already downloaded: " + outputFile.getPath());
+                return;
+            }
+
             String blobUrl = S3_BASE_URL + blobId;
             URL url = new URL(blobUrl);
 
@@ -33,19 +38,12 @@ public class DownloadManager {
             connection.setRequestMethod("GET");
 
             if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
-                // Decompress GZIP
                 GZIPInputStream gzipInputStream = new GZIPInputStream(connection.getInputStream());
                 InputStreamReader reader = new InputStreamReader(gzipInputStream, encoding);
                 BufferedReader bufferedReader = new BufferedReader(reader);
 
-                // Prepare output file
-                String filenameOnly = Paths.get(path).getFileName().toString(); // Get only filename
-                String safePath = filenameOnly.replaceAll("[^a-zA-Z0-9\\.\\-]", "_"); // Safer filename
+                outputFile.getParentFile().mkdirs();
 
-                File outputFile = new File(outputDir, safePath);
-                outputFile.getParentFile().mkdirs(); // Create directories
-
-                // Write to output file
                 try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(outputFile), StandardCharsets.UTF_8))) {
                     String line;
                     while ((line = bufferedReader.readLine()) != null) {
@@ -66,4 +64,4 @@ public class DownloadManager {
             e.printStackTrace();
         }
     }
-}
+} 
