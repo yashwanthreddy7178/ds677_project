@@ -42,7 +42,7 @@ public class Main {
                 ProcessBuilder pb = new ProcessBuilder("python", pythonScript,
                         "--token", token,
                         "--output", outputPath,
-                        "--limit", "10000");
+                        "--limit", "50000");
                 pb.inheritIO();
                 Process process = pb.start();
                 int exitCode = process.waitFor();
@@ -73,7 +73,7 @@ public class Main {
         String outputDir = "downloaded";
         new File(outputDir).mkdirs();
 
-        for (int i = 0; i < Math.min(5, metadataList.size()); i++) {
+        for (int i = 0; i < metadataList.size(); i++) {
             Map<String, String> entry = metadataList.get(i);
             downloadManager.downloadBlob(entry, outputDir);
         }
