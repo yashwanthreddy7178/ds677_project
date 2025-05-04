@@ -1,3 +1,4 @@
+// JavaParserManager.java
 package seedgathering;
 
 import ch.usi.si.seart.treesitter.*;
@@ -15,12 +16,15 @@ public class JavaParserManager implements AutoCloseable {
     private final ObjectMapper mapper = new ObjectMapper();
     private final BufferedWriter writer;
 
+    private int fileCount = 0;
+    private int seedCount = 0;
+    private int filterSkipped = 0;
+    private int errorSkipped = 0;
+
     public JavaParserManager(String outputSeedPath) {
         try {
-            // Load native Tree-sitter library
             LibraryLoader.load();
 
-            // Prepare output file
             File seedFile = new File(outputSeedPath);
             seedFile.getParentFile().mkdirs();
             writer = new BufferedWriter(new FileWriter(seedFile));
@@ -41,19 +45,22 @@ public class JavaParserManager implements AutoCloseable {
             ).get();
 
             forkJoinPool.shutdown();
+
+            System.out.println("\n📊 Parsing Summary:");
+            System.out.println("📄 Total files scanned: " + fileCount);
+            System.out.println("✅ Total methods written: " + seedCount);
+            System.out.println("🚫 Skipped due to missing javadoc or return: " + filterSkipped);
+            System.out.println("❌ Skipped due to Tree-sitter error: " + errorSkipped);
+
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     private void parseJavaFile(Path javaFilePath) {
+        fileCount++;
         try {
             String content = Files.readString(javaFilePath);
-
-            //if (content.length() > 50000) {
-            //    System.out.println("Skipping huge file: " + javaFilePath.toString());
-            //    return;
-            //}
 
             Parser parser = Parser.getFor(Language.JAVA);
             Tree tree = parser.parse(content);
@@ -65,12 +72,21 @@ public class JavaParserManager implements AutoCloseable {
             for (Node method : methods) {
                 try {
                     String javadoc = findJavaDoc(method, bytes);
-                    if (javadoc == null || javadoc.trim().isEmpty()) continue;
-                    if (!hasReturnWithValue(method)) continue;
+                    if (javadoc == null || javadoc.trim().isEmpty()) {
+                        filterSkipped++;
+                        continue;
+                    }
+                    if (!hasReturnWithValue(method)) {
+                        filterSkipped++;
+                        continue;
+                    }
 
                     String methodSource = extractSource(method, bytes);
                     Node methodNameNode = method.getChildByFieldName("name");
-                    if (methodNameNode == null) continue;
+                    if (methodNameNode == null) {
+                        filterSkipped++;
+                        continue;
+                    }
 
                     String methodName = extractSource(methodNameNode, bytes);
                     String fullContent = javadoc + "\n" + methodSource;
@@ -86,19 +102,20 @@ public class JavaParserManager implements AutoCloseable {
 
                         String json = mapper.writeValueAsString(seed);
                         writer.write(json);
-                        writer.newLine(); // ✅ ensures JSONL
+                        writer.newLine();
+                        seedCount++;
                         System.out.println("Extracted seed from: " + methodName + " in " + javaFilePath.toString());
                     } else {
-                        System.err.println("Skipping invalid seed for: " + javaFilePath);
+                        filterSkipped++;
                     }
                 } catch (Exception | Error e) {
-                    System.err.println("Skipping method due to Tree-sitter error: " + e.getMessage());
+                    errorSkipped++;
                 }
             }
 
             tree.close();
         } catch (IOException | ParsingException e) {
-            e.printStackTrace();
+            errorSkipped++;
         }
     }
 
@@ -165,7 +182,7 @@ public class JavaParserManager implements AutoCloseable {
     @Override
     public void close() {
         try {
-            if (writer != null) writer.close(); // ✅ flushes all content
+            if (writer != null) writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
