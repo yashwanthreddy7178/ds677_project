@@ -8,7 +8,7 @@ import okhttp3.*;
 import java.io.*;
 import java.util.*;
 
-public class SelfCompletionGenerator {
+public class SelfCompletionGen {
 
     private static final String OPENAI_API_KEY = System.getenv("OPENAI_API_KEY");
     private static final String OPENAI_ENDPOINT = System.getenv("OPENAI_BASE_URL") + "/chat/completions";

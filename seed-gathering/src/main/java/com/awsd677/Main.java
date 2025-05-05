@@ -29,7 +29,7 @@ public class Main {
         new java.io.File(outputDir).mkdirs(); // Create if not exist
 
         // Download each file
-        for (int i = 0; i < Math.min(5, metadataList.size()); i++) { // TEST: first 5 files
+        for (int i = 0; i < Math.min(50, metadataList.size()); i++) { // TEST: first 50 files
         //for (int i = 0; i < metadataList.size(); i++) {   // No Test
             Map<String, String> entry = metadataList.get(i);
             downloadManager.downloadBlob(entry, outputDir);
