@@ -42,7 +42,7 @@ public class Main {
                 ProcessBuilder pb = new ProcessBuilder("python", pythonScript,
                         "--token", token,
                         "--output", outputPath,
-                        "--limit", "100000");
+                        "--limit", "20000");
                 pb.inheritIO();
                 Process process = pb.start();
                 int exitCode = process.waitFor();
@@ -74,15 +74,14 @@ public class Main {
         new File(outputDir).mkdirs();
 
         // Uncomment this block to enable downloading
-        /*
+        
         for (int i = 0; i < metadataList.size(); i++) {
             Map<String, String> entry = metadataList.get(i);
             downloadManager.downloadBlob(entry, outputDir);
         }
         System.out.println("✅ Files downloaded. Proceeding to Java parsing...");
-        */
 
-        File seedsFile = new File("seeds/seeds_clean.jsonl");
+        File seedsFile = new File("seeds/seeds.jsonl");
         if (!seedsFile.exists()) {
             try (JavaParserManager parserManager = new JavaParserManager("seeds/seeds.jsonl")) {
                 parserManager.parseAllJavaFiles(outputDir);
