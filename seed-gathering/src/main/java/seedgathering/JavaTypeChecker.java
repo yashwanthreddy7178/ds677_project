@@ -7,105 +7,113 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.*;
 import java.nio.file.*;
 import java.util.List;
-import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.*;
 
 public class JavaTypeChecker {
-
-    private static final int THREADS = 2; // ✅ LIMIT threads to reduce CPU usage
+    // Use env var or default to 2 threads
+    private static final int THREADS = Integer.parseInt(System.getenv().getOrDefault("TYPECHECK_THREADS", "2"));
     private static final ObjectMapper mapper = new ObjectMapper();
 
     public static void runTypeCheck(String inputPath, String outputPath) throws IOException, InterruptedException {
         List<String> lines = Files.readAllLines(Paths.get(inputPath));
         int total = lines.size();
+        final int BATCH_SIZE = 500; // Tune for your system
 
-        ExecutorService executor = Executors.newFixedThreadPool(THREADS);
-        List<Future<String>> results = new CopyOnWriteArrayList<>();
-
-        AtomicInteger index = new AtomicInteger(0);
         AtomicInteger keptCount = new AtomicInteger(0);
+        Path tempDir = Files.createTempDirectory("typecheck");
 
-        for (String line : lines) {
-            int currentIndex = index.incrementAndGet();
+        try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(outputPath))) {
+            for (int batchStart = 0; batchStart < total; batchStart += BATCH_SIZE) {
+                int batchEnd = Math.min(batchStart + BATCH_SIZE, total);
+                List<String> batchLines = lines.subList(batchStart, batchEnd);
 
-            results.add(executor.submit(() -> {
-                try {
-                    JsonNode node = mapper.readTree(line);
-                    if (node == null || node.isMissingNode() || !node.isObject()) return null;
+                // Prepare lists for this batch
+                List<String> classNames = new java.util.ArrayList<>();
+                List<String> jsons = new java.util.ArrayList<>();
+                List<Path> javaFiles = new java.util.ArrayList<>();
+                List<String> debugJavaSources = new java.util.ArrayList<>();
 
-                    ObjectNode obj = (ObjectNode) node;
-                    String content = obj.has("content") ? obj.get("content").asText() : obj.get("seed").asText();
-
-                    if (compiles(content)) {
-                        keptCount.incrementAndGet();
-                        if (currentIndex % 100 == 0 || currentIndex == total) {
-                            System.out.println("✅ TypeChecked seed " + currentIndex + " / " + total + " (kept: " + keptCount.get() + ")");
+                int idx = 0;
+                for (String line : batchLines) {
+                    try {
+                        JsonNode node = mapper.readTree(line);
+                        if (node == null || node.isMissingNode() || !node.isObject()) continue;
+                        ObjectNode obj = (ObjectNode) node;
+                        String content = obj.has("content") ? obj.get("content").asText() : obj.get("seed").asText();
+                        if (content == null || content.trim().length() < 10) continue;
+                        String trimmed = content.trim();
+                        String fullCode;
+                        // If it looks like a full class/interface/enum, use as-is
+                        if (trimmed.matches("(?s).*(class|interface|enum)\\s+\\w+.*\\{.*")) {
+                            fullCode = trimmed;
+                        } else {
+                            // Otherwise, wrap as a class
+                            String className = "TempClass" + (batchStart + idx);
+                            fullCode = "public class " + className + " {\n" + content + "\n}";
                         }
-                        return mapper.writeValueAsString(obj);
+                        String className = extractClassName(fullCode);
+                        if (className == null) className = "TempClass" + (batchStart + idx);
+                        Path javaFile = tempDir.resolve(className + ".java");
+                        Files.writeString(javaFile, fullCode);
+                        classNames.add(className);
+                        jsons.add(mapper.writeValueAsString(obj));
+                        javaFiles.add(javaFile);
+                        debugJavaSources.add(fullCode);
+                    } catch (Exception e) {
+                        // skip
                     }
-                } catch (Exception e) {
-                    // skip
+                    idx++;
                 }
-                return null;
-            }));
-        }
 
-        executor.shutdown();
-        executor.awaitTermination(30, TimeUnit.MINUTES);
+                if (javaFiles.isEmpty()) continue;
 
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
-            for (Future<String> result : results) {
-                String json = result.get();
-                if (json != null) {
-                    writer.write(json);
-                    writer.newLine();
+                // Build javac command
+                List<String> command = new java.util.ArrayList<>();
+                command.add("javac");
+                for (Path f : javaFiles) command.add(f.toString());
+
+                ProcessBuilder pb = new ProcessBuilder(command);
+                pb.redirectErrorStream(true);
+                Process process = pb.start();
+                StringBuilder output = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append("\n");
+                    }
                 }
+                process.waitFor();
+
+                // For each file, check if .class exists (success or only symbol errors)
+                for (int i = 0; i < classNames.size(); i++) {
+                    String className = classNames.get(i);
+                    Path classFile = tempDir.resolve(className + ".class");
+                    Path javaFile = javaFiles.get(i);
+                    boolean compiled = Files.exists(classFile);
+                    if (compiled) {
+                        writer.write(jsons.get(i));
+                        writer.newLine();
+                        keptCount.incrementAndGet();
+                    }
+                    // Clean up
+                    Files.deleteIfExists(classFile);
+                    Files.deleteIfExists(javaFile);
+                }
+
+                System.out.println("✅ TypeChecked batch " + (batchEnd) + " / " + total + " (kept: " + keptCount.get() + ")");
             }
-        } catch (ExecutionException e) {
-            e.printStackTrace();
         }
+
+        // Clean up temp directory
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(tempDir)) {
+            for (Path entry : stream) {
+                Files.deleteIfExists(entry);
+            }
+        }
+        Files.deleteIfExists(tempDir);
 
         System.out.println("\n✅ TypeCheck Completed: " + keptCount.get() + " / " + total + " seeds kept");
-    }
-
-    private static boolean compiles(String content) {
-        try {
-            String className = extractClassName(content);
-            if (className == null) className = "TempClass";
-
-            String fullCode = "public class " + className + " {\n" + content + "\n}";
-
-            Path tempDir = Files.createTempDirectory("typecheck");
-            File javaFile = new File(tempDir.toFile(), className + ".java");
-            Files.writeString(javaFile.toPath(), fullCode);
-
-            Process process = new ProcessBuilder("javac", javaFile.getAbsolutePath())
-                    .redirectErrorStream(true)
-                    .start();
-
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            boolean onlySymbolErrors = true;
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-                if (!line.contains("cannot find symbol") && !line.contains("package does not exist")) {
-                    onlySymbolErrors = false;
-                }
-            }
-
-            int exitCode = process.waitFor();
-
-            // Clean up
-            new File(tempDir.toFile(), className + ".class").delete();
-            javaFile.delete();
-            tempDir.toFile().delete();
-
-            return exitCode == 0 || onlySymbolErrors;
-
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     private static String extractClassName(String content) {
