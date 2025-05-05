@@ -1,4 +1,4 @@
-package staralign;
+package seedgathering;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -55,7 +55,7 @@ public class SelfCompletionGen {
         int docStart = content.indexOf("/**");
         int docEnd = content.indexOf("*/") + 2;
         String doc = content.substring(docStart, docEnd);
-        String codeStart = content.substring(docEnd).replaceAll("\s+$", "");
+        String codeStart = content.substring(docEnd).replaceAll("\\s+$", "");
         int bodyStart = codeStart.indexOf("{");
         if (bodyStart != -1) codeStart = codeStart.substring(0, bodyStart + 1);
 
