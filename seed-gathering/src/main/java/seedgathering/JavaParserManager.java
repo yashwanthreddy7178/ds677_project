@@ -182,7 +182,9 @@ public class JavaParserManager implements AutoCloseable {
     @Override
     public void close() {
         try {
-            if (writer != null) writer.close();
+            if (writer != null) {
+                writer.flush();
+                writer.close();}
         } catch (IOException e) {
             e.printStackTrace();
         }
