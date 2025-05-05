@@ -90,7 +90,7 @@ public class LLMSemanticFilter {
             messages.add(userMessage);
 
             ObjectNode payload = mapper.createObjectNode();
-            payload.put("model", "gpt-3.5-turbo");
+            payload.put("model", "gpt-4o");
             payload.set("messages", messages);
             payload.put("temperature", 0);
             payload.put("max_tokens", 50);
