@@ -18,7 +18,7 @@ import java.util.*;
 
 public class Main {
     public static void main(String[] args) {
-        System.out.println("\uD83D\uDE80 Starting Seed Gathering Project for Java...");
+        System.out.println("🚀 Starting Seed Gathering Project for Java...");
         System.out.println("OS: " + System.getProperty("os.name"));
         System.out.println("Arch: " + System.getProperty("os.arch"));
 
@@ -42,7 +42,7 @@ public class Main {
                 ProcessBuilder pb = new ProcessBuilder("python", pythonScript,
                         "--token", token,
                         "--output", outputPath,
-                        "--limit", "50000");
+                        "--limit", "100000");
                 pb.inheritIO();
                 Process process = pb.start();
                 int exitCode = process.waitFor();
@@ -73,14 +73,16 @@ public class Main {
         String outputDir = "downloaded";
         new File(outputDir).mkdirs();
 
+        // Uncomment this block to enable downloading
+        /*
         for (int i = 0; i < metadataList.size(); i++) {
             Map<String, String> entry = metadataList.get(i);
             downloadManager.downloadBlob(entry, outputDir);
         }
-
         System.out.println("✅ Files downloaded. Proceeding to Java parsing...");
+        */
 
-        File seedsFile = new File("seeds/seeds.jsonl");
+        File seedsFile = new File("seeds/seeds_clean.jsonl");
         if (!seedsFile.exists()) {
             try (JavaParserManager parserManager = new JavaParserManager("seeds/seeds.jsonl")) {
                 parserManager.parseAllJavaFiles(outputDir);
