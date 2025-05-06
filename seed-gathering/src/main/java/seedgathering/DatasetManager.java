@@ -37,4 +37,16 @@ public class DatasetManager {
             e.printStackTrace();
         }
     }
+
+    public void saveDatasetAsJsonl(List<Map<String, String>> data, String path) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(path))) {
+            for (Map<String, String> entry : data) {
+                writer.write(mapper.writeValueAsString(entry));
+                writer.newLine();
+            }
+            System.out.println("✅ JSONL saved to: " + path);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 }
