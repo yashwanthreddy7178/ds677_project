@@ -1,11 +1,10 @@
+// JavaLLMClient.java
 package step2;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-
-
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import okhttp3.*;
 
 import java.io.IOException;
@@ -14,10 +13,10 @@ public class JavaLLMClient {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    private static final String ENDPOINT = System.getenv("AZURE_OPENAI_ENDPOINT"); // e.g. https://your-resource.openai.azure.com
-    private static final String DEPLOYMENT = System.getenv("AZURE_OPENAI_DEPLOYMENT"); // e.g. gpt35 or gpt4
-    private static final String API_KEY = System.getenv("AZURE_OPENAI_KEY"); // your Azure OpenAI key
-    private static final String API_VERSION = "2023-07-01-preview";
+    private static final String ENDPOINT = System.getenv("AZURE_OPENAI_ENDPOINT");
+    private static final String DEPLOYMENT = System.getenv("AZURE_OPENAI_DEPLOYMENT");
+    private static final String API_KEY = System.getenv("AZURE_OPENAI_KEY");
+    private static final String API_VERSION = "2025-01-01-preview";
 
     private static final OkHttpClient client = new OkHttpClient();
 
@@ -36,22 +35,37 @@ public class JavaLLMClient {
 
         String url = String.format("%s/openai/deployments/%s/chat/completions?api-version=%s",
                 ENDPOINT, DEPLOYMENT, API_VERSION);
+        System.out.println("🔗 Sending request to: " + url);
 
-        Request request = new Request.Builder()
-                .url(url)
-                .addHeader("api-key", API_KEY)
-                .addHeader("Content-Type", "application/json")
-                .post(RequestBody.create(payload.toString(), MediaType.get("application/json")))
-                .build();
+        int retries = 3;
+        int[] backoffs = {5000, 10000, 20000};
 
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                System.err.println("❌ Azure LLM failed: " + response.code() + " - " + response.message());
-                return null;
+        for (int attempt = 0; attempt <= retries; attempt++) {
+            Request request = new Request.Builder()
+                    .url(url)
+                    .addHeader("api-key", API_KEY)
+                    .addHeader("Content-Type", "application/json")
+                    .post(RequestBody.create(payload.toString(), MediaType.get("application/json")))
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (response.code() == 429 && attempt < retries) {
+                    System.out.println("⚠️ Rate limit hit. Retrying in " + backoffs[attempt]/1000 + "s (attempt " + (attempt + 1) + ")");
+                    try { Thread.sleep(backoffs[attempt]); } catch (InterruptedException ignored) {}
+                    continue;
+                }
+
+                if (!response.isSuccessful()) {
+                    System.err.println("❌ Azure LLM failed: " + response.code() + " - " + response.message());
+                    return null;
+                }
+
+                JsonNode json = mapper.readTree(response.body().string());
+                return json.get("choices").get(0).get("message").get("content").asText().trim();
             }
-
-            JsonNode json = mapper.readTree(response.body().string());
-            return json.get("choices").get(0).get("message").get("content").asText().trim();
         }
+
+        System.err.println("❌ Failed after retries.");
+        return null;
     }
 }
