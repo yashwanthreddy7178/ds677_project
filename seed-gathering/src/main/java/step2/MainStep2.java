@@ -15,6 +15,7 @@ public class MainStep2 {
         }
 
         // Step 2.2 - Java: Generate instruction from code using Azure OpenAI
+        System.out.println("\uD83D\uDD04 Starting Step 2.2: Code to Instruction Generation...");
         try {
             CodeToInstruction.main(null);
         } catch (Exception e) {
@@ -24,6 +25,7 @@ public class MainStep2 {
         }
 
         // Step 2.3 - Java: Generate code from instruction using Azure OpenAI
+        System.out.println("\uD83D\uDD04 Starting Step 2.3: Instruction to Code Generation...");
         try {
             InstructionToCode.main(null);
         } catch (Exception e) {

@@ -9,7 +9,7 @@ public class Step2SplitSeed {
 
     public static void main(String[] args) throws IOException {
         File input = new File("seeds/final_seeds.jsonl");
-        File output = new File("step2_s_c.jsonl");
+        File output = new File("seeds/step2_s_c.jsonl");
 
         ObjectMapper mapper = new ObjectMapper();
         int count = 0;
