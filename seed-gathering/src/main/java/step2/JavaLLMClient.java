@@ -65,6 +65,7 @@ public class JavaLLMClient {
 
     private static String callTogether(ObjectNode payload) throws IOException {
         String url = "https://api.together.xyz/v1/chat/completions";
+        System.out.println("🔗 Sending request to: " + url);
 
         Request request = new Request.Builder()
                 .url(url)

@@ -1,3 +1,4 @@
+// src/step2/InstructionToCode.java
 package step2;
 
 import com.fasterxml.jackson.databind.*;
@@ -8,8 +9,8 @@ import java.util.*;
 
 public class InstructionToCode {
 
-    private static final int BATCH_SIZE = 5;
-    private static final long SLEEP_MS = 6000;
+    private static final int BATCH_SIZE = 10;
+    private static final long SLEEP_MS = 3000;
 
     public static void main(String[] args) throws IOException, InterruptedException {
         File input = new File("seeds/step2_c_i.jsonl");
@@ -51,7 +52,7 @@ public class InstructionToCode {
             String prompt = "Write a Java method based on this instruction:\n" + instruction;
 
             try {
-                String response = JavaLLMClient.chatComplete(prompt, 256);
+                String response = JavaLLMClient.chatComplete(prompt, 256, JavaLLMClient.Provider.TOGETHER);
                 if (response != null) {
                     ObjectNode out = mapper.createObjectNode();
                     out.put("instruction", instruction);
@@ -65,4 +66,4 @@ public class InstructionToCode {
             }
         }
     }
-}
+} 
