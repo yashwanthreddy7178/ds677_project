@@ -1,16 +1,21 @@
-// src/step2/InstructionToCode.java
 package step2;
 
-import com.fasterxml.jackson.databind.*;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import java.io.*;
-import java.util.*;
+import step2.JavaLLMClient;
 
 public class InstructionToCode {
 
-    private static final int BATCH_SIZE = 10;
-    private static final long SLEEP_MS = 3000;
+    private static final int BATCH_SIZE = 5;
+    private static final long SLEEP_MS = 6000;
 
     public static void main(String[] args) throws IOException, InterruptedException {
         File input = new File("seeds/step2_c_i.jsonl");
@@ -52,7 +57,7 @@ public class InstructionToCode {
             String prompt = "Write a Java method based on this instruction:\n" + instruction;
 
             try {
-                String response = JavaLLMClient.chatComplete(prompt, 256, JavaLLMClient.Provider.TOGETHER);
+                String response = JavaLLMClient.chatComplete(prompt, 256);
                 if (response != null) {
                     ObjectNode out = mapper.createObjectNode();
                     out.put("instruction", instruction);
@@ -66,4 +71,4 @@ public class InstructionToCode {
             }
         }
     }
-} 
+}
