@@ -111,16 +111,20 @@ public class JavaLLMClient {
                 }
 
                 if (!response.isSuccessful()) {
-                    System.err.println("❌ Azure LLM failed: " + response.code() + " - " + response.message());
-                    return null;
+                    throw new IOException(response.code() + " " + response.message());
                 }
 
                 JsonNode json = mapper.readTree(response.body().string());
                 return json.get("choices").get(0).get("message").get("content").asText().trim();
+            } catch (IOException e) {
+                if (e.getMessage().contains("400")) {
+                    System.err.println("❌ 400 Error! Prompt was:\n" + payload.toString());
+                }
+                throw e;
             }
         }
 
         System.err.println("❌ Failed after retries.");
         return null;
     }
-} 
+}

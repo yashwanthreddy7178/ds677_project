@@ -42,7 +42,7 @@ public class Main {
                 ProcessBuilder pb = new ProcessBuilder("python", pythonScript,
                         "--token", token,
                         "--output", outputPath,
-                        "--limit", "20000");
+                        "--limit", "300000");
                 pb.inheritIO();
                 Process process = pb.start();
                 int exitCode = process.waitFor();
