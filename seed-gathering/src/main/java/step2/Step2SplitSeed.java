@@ -23,9 +23,10 @@ public class Step2SplitSeed {
                 String seed = obj.get("seed").asText();
 
                 int start = seed.indexOf("/**");
-                int end = seed.indexOf("*/");
+                int end = seed.indexOf("*/", start + 3); // search for closing after opening
 
-                if (start == -1 || end == -1) continue;
+                // Only proceed if both markers exist and end is after start+3
+                if (start == -1 || end == -1 || end <= start + 3) continue;
 
                 String doc = seed.substring(start + 3, end).replace("*", "").trim();
                 String code = seed.substring(end + 2).trim();

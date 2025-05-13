@@ -6,6 +6,7 @@ import seedgathering.DownloadManager;
 import seedgathering.JavaParserManager;
 import seedgathering.JavaSeedFilter;
 import seedgathering.JavaTypeChecker;
+import seedgathering.JavaTypeCheckerLoose;
 import seedgathering.LLMSemanticFilter;
 import seedgathering.RenameContentToSeed;
 
@@ -75,10 +76,10 @@ public class Main {
 
         // Uncomment this block to enable downloading
         
-        for (int i = 0; i < metadataList.size(); i++) {
+        /*for (int i = 0; i < metadataList.size(); i++) {
             Map<String, String> entry = metadataList.get(i);
             downloadManager.downloadBlob(entry, outputDir);
-        }
+        }*/
         System.out.println("✅ Files downloaded. Proceeding to Java parsing...");
 
         File seedsFile = new File("seeds/seeds.jsonl");
@@ -101,10 +102,10 @@ public class Main {
         }
 
         System.out.println("🧪 Running Type Checker...");
-        File typecheckSeedsFile = new File("seeds/typecheck_seeds.jsonl");
+        File typecheckSeedsFile = new File("seeds/typecheck_seeds_loose.jsonl");
         if (!typecheckSeedsFile.exists()) {
             try {
-                JavaTypeChecker.runTypeCheck("seeds/filtered_seeds.jsonl", "seeds/typecheck_seeds.jsonl");
+                JavaTypeCheckerLoose.runTypeCheck("seeds/filtered_seeds.jsonl", "seeds/typecheck_seeds_loose.jsonl");
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
             }
@@ -112,8 +113,8 @@ public class Main {
             System.out.println("✅ typecheck_seeds.jsonl found. Skipping type check.");
         }
 
-        System.out.println("🤖 Running LLM Semantic Filter (Substep 3)...");
-        File llmVerifiedFile = new File("seeds/llm_verified_seeds.jsonl");
+        /*System.out.println("🤖 Running LLM Semantic Filter (Substep 3)...");
+        File llmVerifiedFile = new File("seeds/llm_verified_seeds_loose.jsonl");
         if (!llmVerifiedFile.exists()) {
             try {
                 LLMSemanticFilter.main(null);
@@ -122,7 +123,7 @@ public class Main {
             }
         } else {
             System.out.println("✅ llm_verified_seeds.jsonl found. Skipping LLM filter.");
-        }
+        }*/
 
         System.out.println("✅ LLM filter complete. Proceeding to RenameContentToSeed step...");
         try {

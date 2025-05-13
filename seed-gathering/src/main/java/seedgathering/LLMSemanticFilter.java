@@ -13,8 +13,8 @@ import java.util.HashSet;
 public class LLMSemanticFilter {
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        String inputPath = "seeds/typecheck_seeds.jsonl";
-        String outputPath = "seeds/llm_verified_seeds.jsonl";
+        String inputPath = "seeds/typecheck_seeds_loose.jsonl";
+        String outputPath = "seeds/llm_verified_seeds_loose.jsonl";
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -37,7 +37,7 @@ public class LLMSemanticFilter {
                 String content = obj.has("content") ? obj.get("content").asText() : obj.get("seed").asText();
                 String doc = extractDoc(content);
 
-                if (doc.isBlank() || seenDocs.contains(doc) || doc.replaceAll("\\s+","").startsWith("@")) {
+                if (doc.isBlank() || seenDocs.contains(doc) || isJavadocTagOnly(doc)) {
                     continue;
                 }
                 seenDocs.add(doc);
@@ -90,13 +90,35 @@ public class LLMSemanticFilter {
     private static String extractDoc(String content) {
         int start = content.indexOf("/**");
         int end = content.indexOf("*/", start);
-        if (start == -1 || end == -1)
+        if (start == -1 || end == -1 || end <= start + 3)
             return "";
         return content.substring(start + 3, end).trim();
     }
 
+    /**
+     * Returns true if any line in the doc (after trimming leading '*' and whitespace) starts with '@'.
+     */
+    private static boolean isJavadocTagOnly(String doc) {
+        String[] lines = doc.split("\n");
+        for (String line : lines) {
+            String trimmed = line.replaceFirst("^\\s*\\*\\s*", "").trim();
+            if (trimmed.startsWith("@")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static String buildPrompt(String doc) {
-        return "Based only on the following Javadoc, would it be possible for someone to reasonably reconstruct the corresponding Java method? Please answer YES or NO.\n"
-                + "Javadoc:\n" + doc + "\n";
+        // Sanitize the Javadoc: remove backticks, excessive whitespace, and limit length
+        String cleanDoc = doc.replace('`', '\'')
+                             .replaceAll("\\s+", " ")
+                             .trim();
+        int maxLen = 500; // limit to 500 chars for safety
+        if (cleanDoc.length() > maxLen) {
+            cleanDoc = cleanDoc.substring(0, maxLen) + "...";
+        }
+        return "Based only on the following Javadoc, is it clear and informative enough to help someone understand or implement the corresponding Java method? Please answer YES or NO.\n"
+                + "Javadoc:\n" + cleanDoc + "\n";
     }
 }

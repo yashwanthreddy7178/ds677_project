@@ -9,7 +9,7 @@ import java.io.*;
 public class RenameContentToSeed {
 
     public static void main(String[] args) throws IOException {
-        String inputPath = "seeds/typecheck_seeds.jsonl";
+        String inputPath = "seeds/typecheck_seeds_loose.jsonl";
         String outputPath = "seeds/final_seeds.jsonl";
 
         ObjectMapper mapper = new ObjectMapper();

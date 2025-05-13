@@ -94,19 +94,12 @@ public class JavaTypeChecker {
                     }));
 
             boolean success = task.call();
-            if (!success) {
-                // Fallback: Check for basic syntax correctness
-                return isValidSyntax(content);
-            }
-            return success || output.toString().contains("warning"); // Allow warnings
+            // Only allow code that compiles (success == true)
+            return success;
         } catch (Exception e) {
-            return true; // Allow seeds that fail compilation but don't throw critical exceptions
+            // If an exception occurs, treat as not compilable
+            return false;
         }
-    }
-
-    private static boolean isValidSyntax(String content) {
-        // Basic syntax validation logic (e.g., balanced braces, no obvious errors)
-        return content.contains("{") && content.contains("}");
     }
 
     private static String extractClassName(String content) {
