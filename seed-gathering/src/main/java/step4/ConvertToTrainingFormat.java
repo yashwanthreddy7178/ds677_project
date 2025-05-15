@@ -8,7 +8,7 @@ import java.io.*;
 public class ConvertToTrainingFormat {
 
     public static void main(String[] args) throws IOException {
-        File input = new File("seeds/step3_verified.jsonl");
+        File input = new File("seeds/step2_i_r.jsonl");
         File output = new File("data/final_training_data.jsonl");
         output.getParentFile().mkdirs();
 

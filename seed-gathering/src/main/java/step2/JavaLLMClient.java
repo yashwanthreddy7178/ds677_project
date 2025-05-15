@@ -1,27 +1,34 @@
 package step2;
 
+import java.io.IOException;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import okhttp3.*;
 
-import java.io.IOException;
+import io.github.cdimascio.dotenv.Dotenv;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class JavaLLMClient {
 
     private static final ObjectMapper mapper = new ObjectMapper();
     private static final OkHttpClient client = new OkHttpClient();
+    private static final Dotenv dotenv = Dotenv.load();
 
     // Azure OpenAI Config
-    private static final String AZURE_ENDPOINT = System.getenv("AZURE_OPENAI_ENDPOINT");
-    private static final String AZURE_DEPLOYMENT = System.getenv("AZURE_OPENAI_DEPLOYMENT");
-    private static final String AZURE_KEY = System.getenv("AZURE_OPENAI_KEY");
+    private static final String AZURE_ENDPOINT = dotenv.get("AZURE_OPENAI_ENDPOINT");
+    private static final String AZURE_DEPLOYMENT = dotenv.get("AZURE_OPENAI_DEPLOYMENT");
+    private static final String AZURE_KEY = dotenv.get("AZURE_OPENAI_KEY");
     private static final String AZURE_VERSION = "2025-01-01-preview";
 
     // Together AI Config
-    private static final String TOGETHER_KEY = System.getenv("TOGETHER_API_KEY");
-    private static final String TOGETHER_MODEL = System.getenv("TOGETHER_MODEL");
+    private static final String TOGETHER_KEY = dotenv.get("TOGETHER_API_KEY");
+    private static final String TOGETHER_MODEL = dotenv.get("TOGETHER_MODEL");
 
     public enum Provider {
         TOGETHER,
